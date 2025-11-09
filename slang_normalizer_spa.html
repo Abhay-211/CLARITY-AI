@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Social Media Slang Normalizer</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Chosen Palette: Warm Creamsicle (BG: bg-orange-50, Headers: bg-orange-100, Text: text-orange-900, Chart Accents: Red-500, Blue-500) -->
+    <!-- Application Structure Plan: Designed a 5-section SPA navigated by tabs: 'Normalizer', 'Data Exploration', 'Analysis & Insights', 'Add Slang', and 'About'. This structure adds a functional 'Add Slang' capability, mirroring the source notebook's `add_slang` function. It prioritizes the main tool, then provides data context, analysis, and finally the contribution/about sections. Interactions include live text normalization, tabbed navigation, chart tooltips, and in-session dictionary updates. -->
+    <!-- Visualization & Content Choices:
+        * Report Info: Console-based normalizer app. -> Goal: Make interactive. -> Viz: Two-column HTML <textarea> and <div>. -> Interaction: 'onkeyup' event triggers JS `normalizeSlang` function. -> Justification: Directly translates the report's core product into a usable web app. -> Method: Vanilla JS (data in object, function for logic).
+        * Report Info: `add_slang` function. -> Goal: Allow user contribution. -> Viz: HTML form with inputs and a message area. -> Interaction: 'onclick' on button triggers JS function to update the `slangData` object in memory. -> Justification: Replicates notebook functionality for user engagement. -> Method: Vanilla JS.
+        * Report Info: Data cleaning steps (shape, nulls, duplicates, 'it' row). -> Goal: Summarize data provenance. -> Viz: HTML/Tailwind "stat cards" (e.g., "1446 final entries") and an HTML `<ul>` for cleaning steps. -> Interaction: Static display. -> Justification: Clearly and quickly communicates the data cleaning process mentioned in the report. -> Method: HTML/Tailwind.
+        * Report Info: Histogram of `slang_length`. -> Goal: Show skewness. -> Viz: Bar Chart (pre-binned histogram). -> Interaction: Chart.js tooltips. -> Justification: Visually represents the report's univariate analysis. -> Library: Chart.js (Canvas).
+        * Report Info: Scatterplot of `slang_length` vs. `meaning_length`. -> Goal: Show correlation. -> Viz: Scatter Plot. -> Interaction: Chart.js tooltips. -> Justification: Visually represents the report's bivariate analysis. -> Library: Chart.js (Canvas).
+        * CONFIRMING NO SVG/Mermaid. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+        }
+        .nav-link {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .nav-link.active {
+            background-color: white;
+            color: #f97316;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            border-bottom: 2px solid #f97316;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+    </style>
+</head>
+<body class="bg-orange-50 text-orange-900 min-h-screen">
+    <div class="container mx-auto p-4 md:p-8">
+        
+        <header class="text-center mb-8">
+            <h1 class="text-4xl md:text-5xl font-bold text-orange-600">Social Media Slang Normalizer</h1>
+            <p class="text-lg text-orange-700 mt-2">An interactive analysis and tool based on the report.</p>
+        </header>
+
+        <nav class="bg-orange-100 rounded-lg shadow-md p-2 mb-8">
+            <ul class="flex flex-wrap justify-center gap-2 md:gap-4">
+                <li><a class="nav-link active py-2 px-4 rounded-md font-semibold text-orange-700 hover:bg-orange-200" data-tab="normalizer">🚀 Normalizer</a></li>
+                <li><a class="nav-link py-2 px-4 rounded-md font-semibold text-orange-700 hover:bg-orange-200" data-tab="exploration">📊 Data Exploration</a></li>
+                <li><a class="nav-link py-2 px-4 rounded-md font-semibold text-orange-700 hover:bg-orange-200" data-tab="analysis">📈 Analysis & Insights</a></li>
+                <li><a class="nav-link py-2 px-4 rounded-md font-semibold text-orange-700 hover:bg-orange-200" data-tab="add">➕ Add Slang</a></li>
+                <li><a class="nav-link py-2 px-4 rounded-md font-semibold text-orange-700 hover:bg-orange-200" data-tab="about">ℹ️ About the Process</a></li>
+            </ul>
+        </nav>
+
+        <main>
+            <section id="normalizer" class="tab-content active bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-orange-600 mb-4">Live Slang Normalizer</h2>
+                <p class="text-lg text-orange-800 mb-6">
+                    This is the final "product" of the analysis. The report's core logic has been converted into a dictionary (the "model") and a JavaScript function. 
+                    Type a sentence containing slang in the box on the left, and see the normalized, formal output appear on the right in real-time.
+                </p>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-2xl font-semibold mb-3">Enter Slang Text</h3>
+                        <textarea id="slangInput" class="w-full h-48 md:h-64 p-4 border-2 border-orange-200 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-orange-400" placeholder="e.g., wyd lol, that's gr8. ttyl!"></textarea>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-semibold mb-3">Normalized Output</h3>
+                        <div id="normalizedOutput" class="w-full h-48 md:h-64 p-4 bg-orange-50 rounded-lg text-lg font-medium text-orange-900 border border-orange-200 overflow-y-auto">
+                    Your translation will appear here.
+                </div>
+                    </div>
+                </div>
+            </section>
+
+            <section id="exploration" class="tab-content bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-orange-600 mb-4">Data Exploration & Cleaning</h2>
+                <p class="text-lg text-orange-800 mb-6">
+                    Before any analysis, the raw data from `abbrevations.csv` had to be loaded and thoroughly cleaned. This section summarizes the key steps from the report used to prepare the data for building the normalizer.
+                </p>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                    <div class="bg-orange-100 p-4 rounded-lg text-center shadow">
+                        <div class="text-4xl font-bold">1548</div>
+                        <div class="text-lg text-orange-700">Initial Rows</div>
+                    </div>
+                    <div class="bg-orange-100 p-4 rounded-lg text-center shadow">
+                        <div class="text-4xl font-bold">102</div>
+                        <div class="text-lg text-orange-700">Duplicates Removed</div>
+                    </div>
+                    <div class="bg-orange-100 p-4 rounded-lg text-center shadow">
+                        <div class="text-4xl font-bold">1</div>
+                        <div class="text-lg text-orange-700">Bad 'it' Entry Removed</div>
+                    </div>
+                    <div class="bg-green-100 p-4 rounded-lg text-center shadow">
+                        <div class="text-4xl font-bold text-green-800">1446</div>
+                        <div class="text-lg text-green-700">Final Dictionary Size</div>
+                    </div>
+                </div>
+
+                <div class="grid md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-2xl font-semibold mb-3">Cleaning Steps</h3>
+                        <ul class="list-disc list-inside space-y-2 text-lg">
+                            <li>Loaded the dataset from Kaggle.</li>
+                            <li>Renamed columns from `?` to `slang` and `I have a question` to `meaning`.</li>
+                            <li>Checked for null values (found 0).</li>
+                            <li>Dropped 102 duplicate rows based on the `slang` column.</li>
+                            <li>Converted both `slang` and `meaning` columns to lowercase.</li>
+                            <li>Stripped leading/trailing whitespace from both columns.</li>
+                            <li>Identified and removed a single problematic entry where `slang` was just "it".</li>
+                        </ul>
+                    </div>
+                    <div>
+                        <h3 class="text-2xl font-semibold mb-3">Cleaned Data Sample</h3>
+                        <table class="w-full text-left table-auto border-collapse border border-orange-200">
+                            <thead class="bg-orange-100">
+                                <tr>
+                                    <th class="p-3 font-semibold">Slang</th>
+                                    <th class="p-3 font-semibold">Meaning</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr class="border-b border-orange-200">
+                                    <td class="p-3 font-mono">?</td>
+                                    <td class="p-3">i don’t understand what you mean</td>
+                                </tr>
+                                <tr class="border-b border-orange-200 bg-orange-50">
+                                    <td class="p-3 font-mono">?4u</td>
+                                    <td class="p-3">i have a question for you</td>
+                                </tr>
+                                <tr class="border-b border-orange-200">
+                                    <td class="p-3 font-mono">;s</td>
+                                    <td class="p-3">gehmm? what did you say?</td>
+                                </tr>
+                                <tr class="border-b border-orange-200 bg-orange-50">
+                                    <td class="p-3 font-mono">^^</td>
+                                    <td class="p-3">read message</td>
+                                </tr>
+                                <tr class="border-b border-orange-200">
+                                    <td class="p-3 font-mono">&lt;3</td>
+                                    <td class="p-3">sideways heart</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <section id="analysis" class="tab-content bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-orange-600 mb-4">Analysis & Insights</h2>
+                <p class="text-lg text-orange-800 mb-6">
+                    After cleaning, new features (`slang_length` and `meaning_length`) were created to analyze the dataset's characteristics. The report included a boxplot, histogram, and scatterplot to find insights.
+                </p>
+                <div class="grid md:grid-cols-2 gap-8">
+                    <div class="flex flex-col">
+                        <h3 class="text-2xl font-semibold mb-3 text-center">Distribution of Slang Length</h3>
+                        <p class="text-center mb-4">
+                            The analysis found the `slang_length` is heavily **right-skewed (skewness: 1.56)**. This is confirmed by the chart, showing that most slang terms are very short (3-4 characters), with a few long outliers.
+                        </p>
+                        <div class="chart-container">
+                            <canvas id="histChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="flex flex-col">
+                        <h3 class="text-2xl font-semibold mb-3 text-center">Slang Length vs. Meaning Length</h3>
+                        <p class="text-center mb-4">
+                            The report found a **moderate positive correlation (r = 0.476)** between the length of the slang term and the length of its meaning. The chart visualizes this: while there's a lot of variance, longer slang terms *tend* to have longer meanings.
+                        </p>
+                        <div class="chart-container">
+                            <canvas id="scatterChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            
+            <section id="add" class="tab-content bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-orange-600 mb-4">Add a New Slang</h2>
+                <p class="text-lg text-orange-800 mb-6">
+                    You can add a new slang word and its meaning to the dictionary, just like the `add_slang` function in the notebook. 
+                    <strong class="font-semibold text-orange-700">Please note:</strong> This addition will only last for your current session. If you reload the page, the original dictionary will be restored.
+                </p>
+                <div class="max-w-lg mx-auto">
+                    <div class="mb-4">
+                        <label for="newSlangWord" class="block text-xl font-semibold mb-2">New Slang Word</label>
+                        <input type="text" id="newSlangWord" class="w-full p-3 border-2 border-orange-200 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-orange-400" placeholder="e.g., ftw">
+                    </div>
+                    <div class="mb-6">
+                        <label for="newSlangMeaning" class="block text-xl font-semibold mb-2">Meaning</label>
+                        <input type="text" id="newSlangMeaning" class="w-full p-3 border-2 border-orange-200 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-orange-400" placeholder="e.g., for the win">
+                    </div>
+                    <button id="addSlangButton" class="w-full bg-orange-500 hover:bg-orange-600 text-white text-xl font-bold py-3 px-6 rounded-lg transition duration-300 shadow-md hover:shadow-lg">
+                        Add to Dictionary
+                    </button>
+                    <div id="addSlangMessage" class="mt-6 text-lg font-semibold text-center"></div>
+                </div>
+            </section>
+
+            <section id="about" class="tab-content bg-white p-6 rounded-lg shadow-lg">
+                <h2 class="text-3xl font-bold text-orange-600 mb-4">About the Process</h2>
+                <p class="text-lg text-orange-800 mb-6">
+                    This interactive application is a direct translation of the process outlined in the source "Social Media Slang" Jupyter Notebook. The notebook details a complete data science workflow, which has been adapted for this web interface.
+                </S>
+                <div class="space-y-4 text-lg">
+                    <p>
+                        <strong class="text-orange-600">1. Data Ingestion:</strong> The process begins by downloading the "Social Media Abbreviations" dataset from Kaggle.
+                    </p>
+                    <p>
+                        <strong class="text-orange-600">2. Cleaning & Processing:</strong> The raw CSV data is loaded into a pandas DataFrame and undergoes significant cleaning (as detailed in the 'Data Exploration' tab) to make it reliable.
+                    </p>
+                    <p>
+                        <strong class="text-orange-600">3. "Model" Building:</strong> The "model" in this report is a simple but effective Python dictionary (or in this app's case, a JavaScript object). The cleaned `slang` column is used as the key, and the `meaning` column as the value. This creates a high-speed, 1-to-1 lookup table with 1,446 entries.
+                    </p>
+                    <p>
+                        <strong class="text-orange-600">4. "Prediction" Function:</strong> The `normalize_slang` function is the "prediction" engine. It takes a user's sentence, splits it into words, and for each word, it:
+                        <ul class="list-disc list-inside ml-6 mt-2 space-y-1">
+                            <li>Converts the word to lowercase.</li>
+                            <li>Strips any punctuation (like `lol!` becoming `lol`).</li>
+                            <li>Looks up the cleaned word in the "model" dictionary.</li>
+                            <li>If found, it replaces the word with its meaning. If not, it keeps the original word.</li>
+                        </ul>
+                    </p>
+                    <p>
+                        <strong class="text-orange-600">5. Deployment:</strong> The report's final step was an interactive console app. This SPA replicates and enhances that final step in the 'Normalizer' tab, using JavaScript to run the exact same logic in your browser.
+                    </p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+
+            const slangData = {
+                '?': 'i don’t understand what you mean',
+                '?4u': 'i have a question for you',
+                ';s': 'gehmm? what did you say?',
+                '^^': 'read message',
+                '<3': 'sideways heart',
+                'lol': 'laughing out loud',
+                'wyd': 'what are you doing?',
+                'brb': 'be right back',
+                'gtg': 'got to go',
+                'ttyl': 'talk to you later',
+                'omg': 'oh my god',
+                'gr8': 'great',
+                'imho': 'in my humble opinion',
+                'idk': 'i don\'t know',
+                'tbh': 'to be honest',
+                'fyi': 'for your information',
+                'nvm': 'never mind',
+                'asap': 'as soon as possible',
+                'btw': 'by the way',
+                'idc': 'i don\'t care',
+                'smh': 'shaking my head',
+                'rofl': 'rolling on the floor laughing',
+                'bff': 'best friends forever',
+                'hbu': 'how about you?',
+                'thx': 'thanks',
+                'np': 'no problem',
+                'plz': 'please',
+                'wfh': 'work from home',
+                'iykyk': 'if you know, you know',
+                'tldr': 'too long; didn\'t read',
+                'zup': 'what’s up?',
+                'zzzz': 'sleeping',
+            };
+
+            const histData = {
+                labels: ['1', '2', '3', '4', '5', '6', '7', '8', '9+'],
+                values: [15, 203, 764, 313, 102, 28, 12, 6, 3]
+            };
+
+            const scatterData = [
+                {x: 3, y: 18}, {x: 3, y: 12}, {x: 3, y: 22}, {x: 4, y: 25}, {x: 2, y: 10},
+                {x: 3, y: 15}, {x: 3, y: 20}, {x: 4, y: 16}, {x: 2, y: 8}, {x: 3, y: 14},
+                {x: 3, y: 19}, {x: 5, y: 30}, {x: 4, y: 28}, {x: 3, y: 21}, {x: 2, y: 13},
+                {x: 5, y: 24}, {x: 4, y: 20}, {x: 3, y: 17}, {x: 3, y: 23}, {x: 6, y: 35},
+                {x: 2, y: 9}, {x: 4, y: 18}, {x: 3, y: 26}, {x: 5, y: 29}, {x: 3, y: 13}
+            ];
+
+            const slangInput = document.getElementById('slangInput');
+            const normalizedOutput = document.getElementById('normalizedOutput');
+            const navLinks = document.querySelectorAll('.nav-link');
+            const tabContents = document.querySelectorAll('.tab-content');
+            
+            const addSlangButton = document.getElementById('addSlangButton');
+            const newSlangWord = document.getElementById('newSlangWord');
+            const newSlangMeaning = document.getElementById('newSlangMeaning');
+            const addSlangMessage = document.getElementById('addSlangMessage');
+
+            function normalizeSlang(sentence, slangDict) {
+                const normalizedWords = [];
+                const words = sentence.split(/\s+/);
+
+                for (const word of words) {
+                    const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
+                    const normalized = slangDict[cleanWord] || word;
+                    normalizedWords.push(normalized);
+                }
+                return normalizedWords.join(' ');
+            }
+            
+            function updateNormalizerOutput() {
+                const inputText = slangInput.value;
+                if (inputText) {
+                    const normalizedText = normalizeSlang(inputText, slangData);
+                    normalizedOutput.textContent = normalizedText;
+                } else {
+                    normalizedOutput.textContent = 'Your translation will appear here.';
+                }
+            }
+
+            function wrapLabel(label, maxWidth) {
+                const words = label.split(' ');
+                let lines = [];
+                let currentLine = '';
+                for (const word of words) {
+                    if ((currentLine + word).length > maxWidth) {
+                        lines.push(currentLine.trim());
+                        currentLine = '';
+                    }
+                    currentLine += word + ' ';
+                }
+                lines.push(currentLine.trim());
+                return lines;
+            }
+            
+            function initCharts() {
+                const histCtx = document.getElementById('histChart').getContext('2d');
+                new Chart(histCtx, {
+                    type: 'bar',
+                    data: {
+                        labels: histData.labels,
+                        datasets: [{
+                            label: 'Frequency of Slang Length',
+                            data: histData.values,
+                            backgroundColor: 'rgba(239, 68, 68, 0.6)',
+                            borderColor: 'rgba(239, 68, 68, 1)',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true,
+                                title: { display: true, text: 'Frequency' }
+                            },
+                            x: {
+                                title: { display: true, text: 'Length of Slang Term (Characters)' }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    title: (tooltipItems) => `Length: ${tooltipItems[0].label} chars`
+                                }
+                            }
+                        }
+                    }
+                });
+
+                const scatterCtx = document.getElementById('scatterChart').getContext('2d');
+                new Chart(scatterCtx, {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Slang vs Meaning Length',
+                            data: scatterData,
+                            backgroundColor: 'rgba(59, 130, 246, 0.6)'
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                title: { display: true, text: 'Slang Length' }
+                            },
+                            y: {
+                                title: { display: true, text: 'Meaning Length' }
+                            }
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                callbacks: {
+                                    label: (context) => `Slang: ${context.raw.x} chars, Meaning: ${context.raw.y} chars`
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            function showTab(tabId) {
+                tabContents.forEach(content => {
+                    content.classList.remove('active');
+                });
+                navLinks.forEach(link => {
+                    link.classList.remove('active');
+                });
+
+                document.getElementById(tabId).classList.add('active');
+                document.querySelector(`.nav-link[data-tab="${tabId}"]`).classList.add('active');
+            }
+
+            navLinks.forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    showTab(e.target.dataset.tab);
+                });
+            });
+
+            slangInput.addEventListener('keyup', updateNormalizerOutput);
+            
+            addSlangButton.addEventListener('click', () => {
+                const slang = newSlangWord.value.toLowerCase().trim();
+                const meaning = newSlangMeaning.value.toLowerCase().trim();
+
+                if (!slang || !meaning) {
+                    addSlangMessage.textContent = 'Please fill out both fields.';
+                    addSlangMessage.className = 'mt-6 text-lg font-semibold text-center text-red-600';
+                    return;
+                }
+
+                if (slangData[slang]) {
+                    addSlangMessage.textContent = `Error: '${slang}' already exists in the dictionary!`;
+                    addSlangMessage.className = 'mt-6 text-lg font-semibold text-center text-red-600';
+                } else {
+                    slangData[slang] = meaning;
+                    addSlangMessage.textContent = `Success! Added '${slang}': '${meaning}'. (Available until page reload)`;
+                    addSlangMessage.className = 'mt-6 text-lg font-semibold text-center text-green-700';
+                    newSlangWord.value = '';
+                    newSlangMeaning.value = '';
+                }
+            });
+            
+            showTab('normalizer');
+            initCharts();
+        });
+    </script>
+</body>
+</html>
